@@ -1,6 +1,7 @@
 package com.wheel.cloud.hystrix.config;
 
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
+import com.wheel.cloud.hystrix.util.ClassUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeansException;
@@ -10,12 +11,17 @@ import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
 @Component
 @Slf4j
 public class HystrixPostProcessor implements BeanPostProcessor {
+
+
+    @Resource
+    private CircuitBreakerManager circuitBreakerManager;
 
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
@@ -58,8 +64,10 @@ public class HystrixPostProcessor implements BeanPostProcessor {
 
 
                 Object res = null;
+                long startInvokeTime = System.currentTimeMillis();
                 try {
                     res = methodProxy.invokeSuper(o, objects);
+
                 } catch (Exception e) {
                     log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
                     if (StringUtils.isNotBlank(fallbackMethodName)) {
@@ -89,5 +97,28 @@ public class HystrixPostProcessor implements BeanPostProcessor {
             }
             throw new RuntimeException("fallback method not found");
         }
+    }
+
+    private void recordSuccess(String className, String methodName, Class<?>[] parameterTypes, long startTime, long endTime) {
+        String methodKey = ClassUtil.generateMethodKey(className, methodName, parameterTypes);
+        InvokeInfo invokeInfo = InvokeInfo.builder()
+                .methodKey(methodKey)
+                .success(true)
+                .duration(endTime - startTime)
+                .build();
+        CircuitBreaker circuitBreaker = circuitBreakerManager.getCircuitBreaker(methodKey);
+        circuitBreaker.recordSuccess(invokeInfo);
+    }
+
+    private void recordFailed(String className, String methodName, Class<?>[] parameterTypes, String exceptionName, String exceptionMessage) {
+        String methodKey = ClassUtil.generateMethodKey(className, methodName, parameterTypes);
+        InvokeInfo invokeInfo = InvokeInfo.builder()
+                .methodKey(methodKey)
+                .success(false)
+                .exceptionName(exceptionName)
+                .exceptionMessage(exceptionMessage)
+                .build();
+        CircuitBreaker circuitBreaker = circuitBreakerManager.getCircuitBreaker(methodKey);
+        circuitBreaker.recordFailed(invokeInfo);
     }
 }
