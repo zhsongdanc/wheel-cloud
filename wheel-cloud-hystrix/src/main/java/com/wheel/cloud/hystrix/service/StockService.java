@@ -14,8 +14,13 @@ public class StockService {
     private OrderService orderService;
 
     @HystrixCommand(fallbackMethod = "defaultPurchase")
-    public String purchase(Long stockId, Long num, Long userId) {
+    public String purchaseWithException(Long stockId, Long num, Long userId) {
         throw new RuntimeException("diyException");
+    }
+
+    @HystrixCommand(fallbackMethod = "defaultPurchase")
+    public String purchaseWithoutException(Long stockId, Long num, Long userId) {
+        return "withoutException";
     }
 
 

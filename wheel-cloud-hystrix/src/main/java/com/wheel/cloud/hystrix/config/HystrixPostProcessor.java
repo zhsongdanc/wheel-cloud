@@ -5,6 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.cglib.proxy.Enhancer;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
@@ -15,7 +18,7 @@ public class HystrixPostProcessor implements BeanPostProcessor {
 
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-        return BeanPostProcessor.super.postProcessBeforeInitialization(bean, beanName);
+        return bean;
     }
 
     @Override
@@ -27,12 +30,48 @@ public class HystrixPostProcessor implements BeanPostProcessor {
                 HystrixCommand hystrixCommand = method.getAnnotation(HystrixCommand.class);
                 String fallbackMethod = hystrixCommand.fallbackMethod();
                 if (StringUtils.isNotBlank(fallbackMethod)) {
-                    log.warn("beanName:{}, hystrix fallbackMethod: {}", beanName, fallbackMethod);
+                    log.info("hystrix proxy create,className:{},methodName:{}", beanClass.getName(), method.getName());
+                    return createProxyObject(bean);
+                } else {
+                    log.info("postProcessAfterInitialization normal");
                 }
             }
         }
+        return bean;
+    }
+
+    private Object createProxyObject(Object originObj) {
+        Enhancer enhancer = new Enhancer();
+        enhancer.setSuperclass(originObj.getClass());
+        enhancer.setCallback(new HystrixMethodInterceptor());
+        return enhancer.create();
+    }
+
+    public static class HystrixMethodInterceptor implements MethodInterceptor {
+        @Override
+        public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+            if (method.isAnnotationPresent(HystrixCommand.class)) {
+                log.info("hystrix proxy intercept,className:{},methodName:{}", o.getClass().getName(), method.getName());
+                HystrixCommand annotation = method.getAnnotation(HystrixCommand.class);
+                String fallbackMethodName = annotation.fallbackMethod();
 
 
-        return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
+                Object res = null;
+                try {
+                    res = methodProxy.invokeSuper(o, objects);
+                } catch (Exception e) {
+                    log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
+                    if (StringUtils.isNotBlank(fallbackMethodName)) {
+                        Method fallbackMethod = o.getClass().getMethod(fallbackMethodName, method.getParameterTypes());
+                        res = fallbackMethod.invoke(o, objects);
+                    }
+                }
+
+                log.info("hystrix proxy intercept end,className:{},methodName:{}", o.getClass().getName(), method.getName());
+                return res;
+            }
+
+            return methodProxy.invokeSuper(o, objects);
+        }
     }
 }
