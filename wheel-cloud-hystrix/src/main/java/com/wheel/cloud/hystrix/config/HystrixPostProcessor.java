@@ -11,6 +11,7 @@ import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 @Component
 @Slf4j
@@ -62,7 +63,8 @@ public class HystrixPostProcessor implements BeanPostProcessor {
                 } catch (Exception e) {
                     log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
                     if (StringUtils.isNotBlank(fallbackMethodName)) {
-                        Method fallbackMethod = o.getClass().getMethod(fallbackMethodName, method.getParameterTypes());
+                        Method fallbackMethod = findFallbackMethod(method.getDeclaringClass(), fallbackMethodName, method.getParameterTypes());
+                        fallbackMethod.setAccessible(true);
                         res = fallbackMethod.invoke(o, objects);
                     }
                 }
@@ -72,6 +74,20 @@ public class HystrixPostProcessor implements BeanPostProcessor {
             }
 
             return methodProxy.invokeSuper(o, objects);
+        }
+    }
+
+    private static Method findFallbackMethod(Class<?> clazz, String methodName, Class<?>[] parameterTypes)  {
+        try {
+            Method method = clazz.getDeclaredMethod(methodName, parameterTypes);
+            method.setAccessible(true);
+            return method;
+        } catch (NoSuchMethodException e) {
+            Class<?> superclass = clazz.getSuperclass();
+            if (superclass != null && superclass != Object.class) {
+                return findFallbackMethod(superclass, methodName, parameterTypes);
+            }
+            throw new RuntimeException("fallback method not found");
         }
     }
 }

@@ -14,8 +14,8 @@ public class CglibProxyTest {
         enhancer.setSuperclass(UserService.class);
         enhancer.setCallback(new UserServiceInterceptor());
         UserService userService = (UserService) enhancer.create();
-        userService.sayHello();
-        userService.doSomething();
+        // 代理类
+        userService.doSomething("szh");
     }
 
 
@@ -29,6 +29,10 @@ public class CglibProxyTest {
 
         public void doSomething() {
             log.info("doSomething");
+        }
+
+        private void doSomething(String name) {
+            log.info("doSomething {}", name);
         }
 
     }

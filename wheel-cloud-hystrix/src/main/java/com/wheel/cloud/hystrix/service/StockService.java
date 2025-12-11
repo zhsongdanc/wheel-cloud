@@ -24,7 +24,7 @@ public class StockService {
     }
 
 
-    public String defaultPurchase(Long stockId, Long num, Long userId) {
+    private String defaultPurchase(Long stockId, Long num, Long userId) {
         return "default";
     }
 
