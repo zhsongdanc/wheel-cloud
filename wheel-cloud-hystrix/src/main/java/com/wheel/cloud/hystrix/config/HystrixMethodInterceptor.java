@@ -44,7 +44,11 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                     fallbackMethod.setAccessible(true);
                     res = fallbackMethod.invoke(o, objects);
                 }
-                recordFailed(methodKey, startInvokeTime, e.getClass().getName(), e.getMessage());
+                if (e instanceof ForbiddenRequestException) {
+                    // nothing to do
+                } else {
+                    recordFailed(methodKey, startInvokeTime, e.getClass().getName(), e.getMessage());
+                }
             }
 
             log.info("hystrix proxy intercept end,className:{},methodName:{}", o.getClass().getName(), method.getName());
