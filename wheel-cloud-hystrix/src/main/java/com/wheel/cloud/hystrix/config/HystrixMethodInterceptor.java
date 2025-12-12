@@ -2,13 +2,12 @@ package com.wheel.cloud.hystrix.config;
 
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
+import com.wheel.cloud.hystrix.exception.ForbiddenRequestException;
 import com.wheel.cloud.hystrix.util.ClassUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
-
-import java.awt.*;
 import java.lang.reflect.Method;
 
 @Slf4j
@@ -33,7 +32,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
             long startInvokeTime = System.currentTimeMillis();
             try {
                 if (!allowRequest(methodKey)) {
-                    throw new FontFormatException("circuit breaker is open");
+                    throw new ForbiddenRequestException("circuit breaker is open");
                 }
                 res = methodProxy.invokeSuper(o, objects);
                 recordSuccess(methodKey, startInvokeTime, System.currentTimeMillis());
