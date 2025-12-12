@@ -3,6 +3,7 @@ package com.wheel.cloud.hystrix.config;
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.analytics.Metrics;
 import com.wheel.cloud.hystrix.enums.CircuitBreakerStatus;
+import com.wheel.cloud.hystrix.spring.HystrixProperties;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -16,20 +17,28 @@ public class CircuitBreaker {
 
     private String methodKey;
 
+    private HystrixProperties properties;
+
     private AtomicReference<CircuitBreakerStatus> currentStatus = new AtomicReference<>(CircuitBreakerStatus.CLOSED);
 
     private Metrics metrics = new Metrics();
 
-    // 半开状态下如果请求通过了意味着什么，要采取什么动作
-    // 什么时候重置这个计数器
-    private AtomicInteger halfOpenCounter = new AtomicInteger(0);
+    // 半开状态下已经发送的请求数
+    private AtomicInteger haveSendReqWhenHalfOpen = new AtomicInteger(0);
 
 
+    /**
+     * 以下情况需要记录：
+     * 1. closed -> open
+     * 2. half open -> open
+     * 3. ?
+     */
     private long coolDownTimestamp = 0;
 
 
-    public CircuitBreaker(String methodKey) {
+    public CircuitBreaker(String methodKey, HystrixProperties hystrixProperties) {
         this.methodKey = methodKey;
+        this.properties = hystrixProperties;
     }
 
 
@@ -38,13 +47,14 @@ public class CircuitBreaker {
         if (currentStatus.get() == CircuitBreakerStatus.OPEN){
             if (coolDownTimePassed()){
                 if (tryChangeOpenToHalfOpen()) {
-                    halfOpenCounter.set(0);
+                    haveSendReqWhenHalfOpen.incrementAndGet();
+                    return true;
                 };
             }
             return false;
         }
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
-            return halfOpenCounter.getAndIncrement() < CircuitBreakerConfig.requestThresholdForHalfOpen;
+            return haveSendReqWhenHalfOpen.get() < properties.getHalfOpenTotalRequest();
         }
         return true;
     }
@@ -55,13 +65,13 @@ public class CircuitBreaker {
 
 
     private boolean coolDownTimePassed() {
-        return System.currentTimeMillis() > coolDownTimestamp + CircuitBreakerConfig.coolDownTime;
+        return System.currentTimeMillis() > coolDownTimestamp + properties.getCoolDownTime();
     }
 
-    /**
+    /**  TODO 暂时不考虑一个请求耗时很久的case,否则会有很多边界条件
      * 状态流转分类：
      * 1. closed -> open
-     * 2. open -> half open
+     * 2. open -> half open (这个不是由于数据统计导致的，因此当前不位于checkAndChangeStatus方法，而是位于allowRequest方法)
      * 3. half open -> closed
      * 4. half open -> open
      */
@@ -70,21 +80,35 @@ public class CircuitBreaker {
         // 1. 清理超过时间窗口的数据
         metrics.clearAllBeforeTimestamp(System.currentTimeMillis());
 
-        // 2. 根据当前数据判断是否要切换状态(还没实现半打开状态) 暂不实现
-//        if (currentStatus.get() == CircuitBreakerStatus.CLOSED){
-//            boolean shouldOpen = metrics.getFailureRate() >= CircuitBreakerConfig.failedThresholdOfCircuitOpen;
-//            if (shouldOpen){
-//                currentStatus = CircuitBreakerStatus.OPEN;
-//            }
-//        }
-        // 如果修改为open后需要重置coolDownTimestamp；如果冷却期过了需要重置coolDownTimestamp
+        // 2.1 如果当前是关的需要检查是否改为关
+        if (currentStatus.get() == CircuitBreakerStatus.CLOSED){
+            boolean shouldOpen = metrics.getFailureRate() >= properties.getClosedToOpenFailedRatio()
+                    && metrics.getFailedCountWhenHalfOpen().get() >= properties.getClosedToOpenMinTotalCount();
+            if (shouldOpen && currentStatus.compareAndSet(CircuitBreakerStatus.CLOSED, CircuitBreakerStatus.OPEN)){
+                coolDownTimestamp = System.currentTimeMillis();
+                metrics.reInitialization();
+            }
+        } else if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN && haveSendReqWhenHalfOpen.get() > 0) {
+
+            float successRatio = metrics.getSuccessCountWhenHalfOpen().get() / (float) haveSendReqWhenHalfOpen.get();
+            if (successRatio >= properties.getHalfOpenToOpenMinSuccessRatio()
+                    && metrics.getSuccessCountWhenHalfOpen().get() >= properties.getHalfOpenToOpenMinSuccessCount()){
+                currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.CLOSED);
+                haveSendReqWhenHalfOpen.set(0);
+            } else if (haveSendReqWhenHalfOpen.get() > properties.getHalfOpenTotalRequest()
+                    && currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN)){
+                coolDownTimestamp = System.currentTimeMillis();
+                haveSendReqWhenHalfOpen.set(0);
+                metrics.reInitialization();
+            }
+        }
     }
 
 
 
     public boolean tryChangeOpenToHalfOpen() {
         if (currentStatus.compareAndSet(CircuitBreakerStatus.OPEN, CircuitBreakerStatus.HALF_OPEN)){
-            halfOpenCounter.set(0);
+            haveSendReqWhenHalfOpen.set(0);
             return true;
         }
         return false;
@@ -92,7 +116,7 @@ public class CircuitBreaker {
 
     public boolean tryChangeHalfOpenToClosed() {
         if (currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.CLOSED)){
-            halfOpenCounter.set(0);
+            haveSendReqWhenHalfOpen.set(0);
             return true;
         }
         return false;
@@ -101,14 +125,23 @@ public class CircuitBreaker {
 
 
     public void recordSuccess(InvokeInfo invokeInfo){
-        metrics.getSuccessInvokeQueue().add(invokeInfo);
+        if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
+            haveSendReqWhenHalfOpen.incrementAndGet();
+            metrics.getSuccessCountWhenHalfOpen().incrementAndGet();
+        } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
+            metrics.getSuccessInvokeQueue().add(invokeInfo);
+        }
         checkAndChangeStatus();
     }
 
     public void recordFailed(InvokeInfo invokeInfo){
-        metrics.getFailedInvokeQueue().add(invokeInfo);
+        if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
+            haveSendReqWhenHalfOpen.incrementAndGet();
+            metrics.getFailedCountWhenHalfOpen().incrementAndGet();
+        } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
+            metrics.getFailedInvokeQueue().add(invokeInfo);
+        }
         checkAndChangeStatus();
-
     }
 
     public void forceOpen(){

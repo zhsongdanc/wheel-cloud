@@ -1,15 +1,13 @@
-package com.wheel.cloud.hystrix.config;
+package com.wheel.cloud.hystrix.spring;
 
-import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
-import com.wheel.cloud.hystrix.util.ClassUtil;
+import com.wheel.cloud.hystrix.config.CircuitBreakerManager;
+import com.wheel.cloud.hystrix.config.HystrixMethodInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.cglib.proxy.Enhancer;
-import org.springframework.cglib.proxy.MethodInterceptor;
-import org.springframework.cglib.proxy.MethodProxy;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
@@ -19,9 +17,11 @@ import java.lang.reflect.Method;
 @Slf4j
 public class HystrixPostProcessor implements BeanPostProcessor {
 
-
     @Resource
     private CircuitBreakerManager circuitBreakerManager;
+
+    @Resource
+    private HystrixProperties hystrixProperties;
 
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {

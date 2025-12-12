@@ -3,6 +3,7 @@ package com.wheel.cloud.hystrix.config;
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
 import com.wheel.cloud.hystrix.exception.ForbiddenRequestException;
+import com.wheel.cloud.hystrix.spring.HystrixProperties;
 import com.wheel.cloud.hystrix.util.ClassUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -43,7 +44,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                     fallbackMethod.setAccessible(true);
                     res = fallbackMethod.invoke(o, objects);
                 }
-                recordFailed(methodKey, e.getClass().getName(), e.getMessage());
+                recordFailed(methodKey, startInvokeTime, e.getClass().getName(), e.getMessage());
             }
 
             log.info("hystrix proxy intercept end,className:{},methodName:{}", o.getClass().getName(), method.getName());
@@ -77,16 +78,18 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
         InvokeInfo invokeInfo = InvokeInfo.builder()
                 .methodKey(methodKey)
                 .success(true)
+                .startTime(startTime)
                 .duration(endTime - startTime)
                 .build();
         CircuitBreaker circuitBreaker = circuitBreakerManager.getCircuitBreaker(methodKey);
         circuitBreaker.recordSuccess(invokeInfo);
     }
 
-    private void recordFailed(String methodKey, String exceptionName, String exceptionMessage) {
+    private void recordFailed(String methodKey, long startInvokeTime, String exceptionName, String exceptionMessage) {
         InvokeInfo invokeInfo = InvokeInfo.builder()
                 .methodKey(methodKey)
                 .success(false)
+                .startTime(startInvokeTime)
                 .exceptionName(exceptionName)
                 .exceptionMessage(exceptionMessage)
                 .build();
