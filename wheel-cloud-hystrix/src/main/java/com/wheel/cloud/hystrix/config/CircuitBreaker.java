@@ -1,5 +1,7 @@
 package com.wheel.cloud.hystrix.config;
 
+import com.wheel.cloud.hystrix.analytics.InvokeInfo;
+import com.wheel.cloud.hystrix.analytics.Metrics;
 import com.wheel.cloud.hystrix.enums.CircuitBreakerStatus;
 import lombok.extern.slf4j.Slf4j;
 

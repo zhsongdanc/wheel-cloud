@@ -1,4 +1,4 @@
-package com.wheel.cloud.hystrix.config;
+package com.wheel.cloud.hystrix.analytics;
 
 import lombok.Builder;
 import lombok.Data;
