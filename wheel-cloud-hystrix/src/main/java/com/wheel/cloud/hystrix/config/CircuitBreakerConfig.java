@@ -8,9 +8,8 @@ public class CircuitBreakerConfig {
     // 少于该次数，不允许熔断
     public static final int minFailedThresholdCount = 10;
 
-    // half open状态下每次允许的最大探测次数
-    public static final int maxProbeCount = 5;
+    // 探测冷却期
+    public static final long coolDownTime = 2*1000;
 
-    // 首次open或探测一次后多久不允许再次探测
-    public static final long coolDownTimeWhenHalfOpen = 2*1000;
+    public static final int requestThresholdForHalfOpen = 5;
 }

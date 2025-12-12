@@ -8,6 +8,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
 
+import java.awt.*;
 import java.lang.reflect.Method;
 
 @Slf4j
@@ -17,8 +18,8 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
 
     public HystrixMethodInterceptor(CircuitBreakerManager circuitBreakerManager) {
         this.circuitBreakerManager = circuitBreakerManager;
-
     }
+
     @Override
     public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
         if (method.isAnnotationPresent(HystrixCommand.class)) {
@@ -26,12 +27,16 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
             HystrixCommand annotation = method.getAnnotation(HystrixCommand.class);
             String fallbackMethodName = annotation.fallbackMethod();
 
+            String methodKey = ClassUtil.generateMethodKey(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes());
 
             Object res = null;
             long startInvokeTime = System.currentTimeMillis();
             try {
+                if (!allowRequest(methodKey)) {
+                    throw new FontFormatException("circuit breaker is open");
+                }
                 res = methodProxy.invokeSuper(o, objects);
-                recordSuccess(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes(), startInvokeTime, System.currentTimeMillis());
+                recordSuccess(methodKey, startInvokeTime, System.currentTimeMillis());
             } catch (Exception e) {
                 log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
                 if (StringUtils.isNotBlank(fallbackMethodName)) {
@@ -39,7 +44,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                     fallbackMethod.setAccessible(true);
                     res = fallbackMethod.invoke(o, objects);
                 }
-                recordFailed(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes(), e.getClass().getName(), e.getMessage());
+                recordFailed(methodKey, e.getClass().getName(), e.getMessage());
             }
 
             log.info("hystrix proxy intercept end,className:{},methodName:{}", o.getClass().getName(), method.getName());
@@ -47,6 +52,11 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
         }
 
         return methodProxy.invokeSuper(o, objects);
+    }
+
+    private boolean allowRequest(String methodKey) {
+        CircuitBreaker circuitBreaker = circuitBreakerManager.getCircuitBreaker(methodKey);
+        return circuitBreaker.allowRequest();
     }
 
 
@@ -64,8 +74,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
         }
     }
 
-    private void recordSuccess(String className, String methodName, Class<?>[] parameterTypes, long startTime, long endTime) {
-        String methodKey = ClassUtil.generateMethodKey(className, methodName, parameterTypes);
+    private void recordSuccess(String methodKey, long startTime, long endTime) {
         InvokeInfo invokeInfo = InvokeInfo.builder()
                 .methodKey(methodKey)
                 .success(true)
@@ -75,8 +84,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
         circuitBreaker.recordSuccess(invokeInfo);
     }
 
-    private void recordFailed(String className, String methodName, Class<?>[] parameterTypes, String exceptionName, String exceptionMessage) {
-        String methodKey = ClassUtil.generateMethodKey(className, methodName, parameterTypes);
+    private void recordFailed(String methodKey, String exceptionName, String exceptionMessage) {
         InvokeInfo invokeInfo = InvokeInfo.builder()
                 .methodKey(methodKey)
                 .success(false)
