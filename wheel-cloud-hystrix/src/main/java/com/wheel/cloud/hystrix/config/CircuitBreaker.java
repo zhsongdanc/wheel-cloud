@@ -1,5 +1,7 @@
 package com.wheel.cloud.hystrix.config;
 
+import com.wheel.cloud.hystrix.analytics.BucketInfo;
+import com.wheel.cloud.hystrix.analytics.CircularList;
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.analytics.Metrics;
 import com.wheel.cloud.hystrix.enums.CircuitBreakerStatus;
@@ -16,6 +18,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class CircuitBreaker {
 
     private String methodKey;
+
+    private CircularList circularList = new CircularList();
 
     private HystrixProperties properties;
 
@@ -46,10 +50,12 @@ public class CircuitBreaker {
 
     /**
      * 这里处理两个状态转换：（1）open -> half open 依赖于冷却期（2）half open -> open 依赖于最大允许请求次数
+     * !! 注意：这里不能直接修改状态
      */
     public boolean allowRequest() {
         // 如果后续很久之后才进行探测，那么下游可能已经恢复了但是会失败一次
         if (currentStatus.get() == CircuitBreakerStatus.OPEN){
+            // todo 为什么标准实现这里就可以探测
             if (coolDownTimePassed()){
                 if (tryChangeOpenToHalfOpen()) {
                     haveSendReqWhenHalfOpen.incrementAndGet();
@@ -71,6 +77,14 @@ public class CircuitBreaker {
                 return false;
             }
         }
+        return true;
+    }
+
+    public boolean allRequestByBucket() {
+        // 1. 删除过期数据
+        circularList.clearExpiredBucket();
+        // 2. 获取失败率判断是否允许通过
+        float successRate = circularList.getSuccessRate();
         return true;
     }
 
