@@ -1,9 +1,7 @@
 package com.wheel.cloud.hystrix.config;
 
-import com.wheel.cloud.hystrix.analytics.BucketInfo;
-import com.wheel.cloud.hystrix.analytics.CircularList;
+import com.wheel.cloud.hystrix.analytics.BucketManager;
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
-import com.wheel.cloud.hystrix.analytics.Metrics;
 import com.wheel.cloud.hystrix.enums.CircuitBreakerStatus;
 import com.wheel.cloud.hystrix.spring.HystrixProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -19,19 +17,16 @@ public class CircuitBreaker {
 
     private String methodKey;
 
-    private CircularList circularList = new CircularList();
+    private BucketManager bucketManager = new BucketManager();
 
     private HystrixProperties properties;
 
     private AtomicReference<CircuitBreakerStatus> currentStatus = new AtomicReference<>(CircuitBreakerStatus.CLOSED);
 
-    private Metrics metrics = new Metrics();
-
     // 半开状态下已经发送的请求数
     private AtomicInteger haveSendReqWhenHalfOpen = new AtomicInteger(0);
-
-    private long lastStartOpenTimestamp = 0;
-
+    private AtomicInteger successfulReqWhenHalfOpen = new AtomicInteger(0);
+    private AtomicInteger failedReqWhenHalfOpen = new AtomicInteger(0);
 
     /**
      * 以下情况需要记录：
@@ -55,36 +50,17 @@ public class CircuitBreaker {
     public boolean allowRequest() {
         // 如果后续很久之后才进行探测，那么下游可能已经恢复了但是会失败一次
         if (currentStatus.get() == CircuitBreakerStatus.OPEN){
-            // todo 为什么标准实现这里就可以探测
+            // todo 为什么标准实现这里就可以探测,因为要不然没地方判断
             if (coolDownTimePassed()){
                 if (tryChangeOpenToHalfOpen()) {
-                    haveSendReqWhenHalfOpen.incrementAndGet();
                     return true;
                 };
             }
             return false;
         }
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
-            boolean shouldPass = haveSendReqWhenHalfOpen.get() < properties.getHalfOpenTotalRequest();
-            if (shouldPass){
-                haveSendReqWhenHalfOpen.incrementAndGet();
-                return true;
-            } else {
-                currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN);
-                haveSendReqWhenHalfOpen.set(0);
-                lastStartOpenTimestamp = System.currentTimeMillis();
-                metrics.reInitialization();
-                return false;
-            }
+            return haveSendReqWhenHalfOpen.get() < properties.getHalfOpenTotalRequest();
         }
-        return true;
-    }
-
-    public boolean allRequestByBucket() {
-        // 1. 删除过期数据
-        circularList.clearExpiredBucket();
-        // 2. 获取失败率判断是否允许通过
-        float successRate = circularList.getSuccessRate();
         return true;
     }
 
@@ -103,28 +79,41 @@ public class CircuitBreaker {
      * 3. half open -> closed
      * 4. half open -> open (暂不处理这个状态，由下一次请求时判断)
      */
-    public void checkAndChangeStatus() {
 
-        // 1. 清理超过时间窗口的数据
-        metrics.clearAllBeforeTimestamp(System.currentTimeMillis() - properties.getTimeWindowWhenClosed());
+    public void changeStatusWhenSuccess(long startTime) {
+        // 半开 -> 关闭
+        if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN && haveSendReqWhenHalfOpen.get() > 0) {
 
-        // 2.1 如果当前是关的需要检查是否改为关
-        if (currentStatus.get() == CircuitBreakerStatus.CLOSED){
-            boolean shouldOpen = metrics.getFailureRate() >= properties.getClosedToOpenFailedRatio()
-                    && metrics.getFailedInvokeQueue().size() >= properties.getClosedToOpenMinTotalCount();
-            if (shouldOpen && currentStatus.compareAndSet(CircuitBreakerStatus.CLOSED, CircuitBreakerStatus.OPEN)){
-                coolDownTimestamp = System.currentTimeMillis();
-                metrics.reInitialization();
-            }
-        } else if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN && haveSendReqWhenHalfOpen.get() > 0) {
-
-            float successRatio = metrics.getSuccessCountWhenHalfOpen().get() / (float) haveSendReqWhenHalfOpen.get();
+            float successRatio = successfulReqWhenHalfOpen.get() / (float) haveSendReqWhenHalfOpen.get();
             if (successRatio >= properties.getHalfOpenToOpenMinSuccessRatio()
-                    && metrics.getSuccessCountWhenHalfOpen().get() >= properties.getHalfOpenToOpenMinSuccessCount()){
+                    && successfulReqWhenHalfOpen.get() >= properties.getHalfOpenToOpenMinSuccessCount()){
                 currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.CLOSED);
-                haveSendReqWhenHalfOpen.set(0);
+                clearHalfOpenMetrics();
             }
         }
+    }
+
+    public void changeStatusWhenFailed(long startTime) {
+        // 2. 关闭 -> 开
+        if (currentStatus.get() == CircuitBreakerStatus.CLOSED){
+            float successRate = bucketManager.computeAndGetSuccessRate();
+
+            boolean shouldOpen = 1 - successRate >= properties.getClosedToOpenFailedRatio();
+            if (shouldOpen && currentStatus.compareAndSet(CircuitBreakerStatus.CLOSED, CircuitBreakerStatus.OPEN)){
+                bucketManager.clearAll();
+                clearHalfOpenMetrics();
+            }
+        } else if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN) { //  半开 -> 打开
+            currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN);
+        }
+
+    }
+
+
+    private void clearHalfOpenMetrics() {
+        haveSendReqWhenHalfOpen.set(0);
+        successfulReqWhenHalfOpen.set(0);
+        failedReqWhenHalfOpen.set(0);
     }
 
 
@@ -146,28 +135,27 @@ public class CircuitBreaker {
 
 
 
+    // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordSuccess(InvokeInfo invokeInfo){
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
-            metrics.getSuccessCountWhenHalfOpen().incrementAndGet();
+            successfulReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
-            metrics.getSuccessInvokeQueue().add(invokeInfo);
+            bucketManager.recordSingle(invokeInfo.getStartTime(), true);
         }
-        checkAndChangeStatus();
+        // 半开->关闭；
+        changeStatusWhenSuccess(invokeInfo.getStartTime());
     }
 
+    // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordFailed(InvokeInfo invokeInfo){
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
-            metrics.getFailedCountWhenHalfOpen().incrementAndGet();
+            failedReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
-            metrics.getFailedInvokeQueue().add(invokeInfo);
+            bucketManager.recordSingle(invokeInfo.getStartTime(), false);
         }
-        checkAndChangeStatus();
-    }
-
-    public void forceOpen(){
-        currentStatus.set(CircuitBreakerStatus.OPEN);
-        // 清除数据
-        metrics.reInitialization();
+        // 半开->开；关闭->开
+        coolDownTimestamp = System.currentTimeMillis();
+        changeStatusWhenFailed(invokeInfo.getStartTime());
     }
 
     public void forceClose(){
