@@ -24,26 +24,12 @@ public class BucketManager {
     // 2. 统计
 
 
-    public float getSuccessRate() {
-        int totalCount = 0;
-        int successCount = 0;
-        for (int i = 0; i < circularBucket.length(); i++) {
-            BucketInfo bucketInfo = circularBucket.get(i);
-            if (bucketInfo == null) {
-                continue;
-            }
-            totalCount += bucketInfo.getTotalRequestCount().sum();
-            successCount += bucketInfo.getSuccessRequestCount().sum();
+    public void clearSingleBucketIfNecessary(int index, BucketInfo bucketInfo) {
+        if (bucketInfo == null) {
+            return;
         }
-
-        return totalCount == 0 ? 0 : (float) successCount / totalCount;
-    }
-
-
-    public void clearSingleBucketIfNecessary(long timestamp) {
-        int bucketIndex = getBucketIndex(timestamp);
-        if (circularBucket.get(bucketIndex) != null && circularBucket.get(bucketIndex).isExpired()) {
-            circularBucket.set(bucketIndex, null);
+        if (bucketInfo.isExpired()) {
+            circularBucket.compareAndSet(index, bucketInfo, null);
         }
     }
 
@@ -57,8 +43,8 @@ public class BucketManager {
     public void recordSingle(long timestamp, boolean success) {
         int bucketIndex = getBucketIndex(timestamp);
         BucketInfo bucketInfo = circularBucket.get(bucketIndex);
-        if (bucketInfo.isExpired()) {
-            circularBucket.compareAndSet(bucketIndex, bucketInfo, new BucketInfo(System.currentTimeMillis()));
+        if (bucketInfo == null || bucketInfo.isExpired()) {
+            circularBucket.compareAndSet(bucketIndex, bucketInfo, new BucketInfo(DEFAULT_BUCKET_TIME));
         }
         bucketInfo = circularBucket.get(bucketIndex);
         bucketInfo.getTotalRequestCount().increment();
@@ -71,24 +57,24 @@ public class BucketManager {
     }
 
 
-    public BucketInfo getOrCreateBucket(long timestamp) {
-        int bucketIndex = getBucketIndex(timestamp);
-        BucketInfo bucketInfo = circularBucket.get(bucketIndex);
-        if (bucketInfo == null) {
-            bucketInfo = new BucketInfo(DEFAULT_SIZE * DEFAULT_BUCKET_TIME / 1000);
-            // 并发场景下，只有首个线程可以操作成功
-            circularBucket.compareAndSet(bucketIndex, null, bucketInfo);
-        }
-
-        return circularBucket.get(bucketIndex);
-    }
-
     private int getBucketIndex(long timestamp) {
-        return (int) (timestamp - START_TIME) / DEFAULT_BUCKET_TIME;
+        return (int) (timestamp - START_TIME) % DEFAULT_BUCKET_TIME;
     }
 
 
     public float computeAndGetSuccessRate() {
-        return 0;
+        int totalCount = 0;
+        int successCount = 0;
+        for (int i = 0; i < circularBucket.length(); i++) {
+            BucketInfo bucketInfo = circularBucket.get(i);
+            if (bucketInfo == null) {
+                continue;
+            }
+            clearSingleBucketIfNecessary(i, bucketInfo);
+            totalCount += bucketInfo.getTotalRequestCount().sum();
+            successCount += bucketInfo.getSuccessRequestCount().sum();
+        }
+
+        return totalCount == 0 ? 0 : (float) successCount / totalCount;
     }
 }

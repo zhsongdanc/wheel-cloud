@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class CircuitBreaker {
 
-    private String methodKey;
+    private final String methodKey;
 
     private BucketManager bucketManager = new BucketManager();
 
@@ -53,13 +53,18 @@ public class CircuitBreaker {
             // todo 为什么标准实现这里就可以探测,因为要不然没地方判断
             if (coolDownTimePassed()){
                 if (tryChangeOpenToHalfOpen()) {
+                    haveSendReqWhenHalfOpen.incrementAndGet();
                     return true;
                 };
             }
             return false;
         }
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
-            return haveSendReqWhenHalfOpen.get() < properties.getHalfOpenTotalRequest();
+            boolean allow =  haveSendReqWhenHalfOpen.get() < properties.getHalfOpenTotalRequest();
+            if (allow){
+                haveSendReqWhenHalfOpen.incrementAndGet();
+            }
+            return allow;
         }
         return true;
     }
@@ -100,11 +105,15 @@ public class CircuitBreaker {
 
             boolean shouldOpen = 1 - successRate >= properties.getClosedToOpenFailedRatio();
             if (shouldOpen && currentStatus.compareAndSet(CircuitBreakerStatus.CLOSED, CircuitBreakerStatus.OPEN)){
+                coolDownTimestamp = System.currentTimeMillis();
                 bucketManager.clearAll();
                 clearHalfOpenMetrics();
             }
         } else if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN) { //  半开 -> 打开
-            currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN);
+            boolean changeHalfOpen2Open = currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN);
+            if (changeHalfOpen2Open){
+                coolDownTimestamp = System.currentTimeMillis();
+            }
         }
 
     }
@@ -153,8 +162,6 @@ public class CircuitBreaker {
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
             bucketManager.recordSingle(invokeInfo.getStartTime(), false);
         }
-        // 半开->开；关闭->开
-        coolDownTimestamp = System.currentTimeMillis();
         changeStatusWhenFailed(invokeInfo.getStartTime());
     }
 
