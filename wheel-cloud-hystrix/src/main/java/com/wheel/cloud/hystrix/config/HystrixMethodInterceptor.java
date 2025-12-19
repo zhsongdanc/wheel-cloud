@@ -37,17 +37,21 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                 }
                 res = methodProxy.invokeSuper(o, objects);
                 recordSuccess(methodKey, startInvokeTime, System.currentTimeMillis());
-            } catch (Exception e) {
+            } catch (Throwable throwable) {
                 log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
                 if (StringUtils.isNotBlank(fallbackMethodName)) {
                     Method fallbackMethod = findFallbackMethod(method.getDeclaringClass(), fallbackMethodName, method.getParameterTypes());
                     fallbackMethod.setAccessible(true);
-                    res = fallbackMethod.invoke(o, objects);
+                    try {
+                        res = fallbackMethod.invoke(o, objects);
+                    } catch (Exception fallbackException) {
+                        throw new ForbiddenRequestException("fallback method invoke error", fallbackException);
+                    }
                 }
-                if (e instanceof ForbiddenRequestException) {
+                if (throwable instanceof ForbiddenRequestException) {
                     // nothing to do
                 } else {
-                    recordFailed(methodKey, startInvokeTime, e.getClass().getName(), e.getMessage());
+                    recordFailed(methodKey, startInvokeTime, throwable.getClass().getName(), throwable.getMessage());
                 }
             }
 
