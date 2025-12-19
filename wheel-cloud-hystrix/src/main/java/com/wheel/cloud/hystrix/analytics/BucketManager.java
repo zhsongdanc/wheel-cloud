@@ -77,9 +77,11 @@ public class BucketManager {
     public float computeAndGetSuccessRate(long startTime) {
         int totalCount = 0;
         int successCount = 0;
+
+        long startTimeThreshold = startTime - (DEFAULT_SIZE * DEFAULT_WINDOW_DURATION);
         for (int i = 0; i < circularBucket.length(); i++) {
             BucketInfo bucketInfo = circularBucket.get(i);
-            if (bucketInfo == null || startTime < bucketInfo.getWindowStartTime()) {
+            if (bucketInfo == null || bucketInfo.getWindowStartTime() < startTimeThreshold) {
                 continue;
             }
             totalCount += bucketInfo.getTotalRequestCount().sum();

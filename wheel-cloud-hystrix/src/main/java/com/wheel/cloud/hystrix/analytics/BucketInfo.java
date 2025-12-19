@@ -12,7 +12,7 @@ public class BucketInfo {
 
         long now = System.currentTimeMillis();
 
-        this.windowStartTime = now - now % 1000;
+        this.windowStartTime = now - now % windowDuration;
     }
 
     private long windowDuration;

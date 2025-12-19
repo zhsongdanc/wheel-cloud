@@ -51,7 +51,6 @@ public class CircuitBreaker {
     public boolean allowRequest() {
         // 如果后续很久之后才进行探测，那么下游可能已经恢复了但是会失败一次
         if (currentStatus.get() == CircuitBreakerStatus.OPEN){
-            // todo 为什么标准实现这里就可以探测,因为要不然没地方判断
             if (coolDownTimePassed()){
                 if (tryChangeOpenToHalfOpen()) {
                     haveSendReqWhenHalfOpen.incrementAndGet();
@@ -115,6 +114,7 @@ public class CircuitBreaker {
             boolean changeHalfOpen2Open = currentStatus.compareAndSet(CircuitBreakerStatus.HALF_OPEN, CircuitBreakerStatus.OPEN);
             if (changeHalfOpen2Open){
                 coolDownTimestamp = System.currentTimeMillis();
+                clearHalfOpenMetrics();
             }
         }
 
@@ -125,6 +125,7 @@ public class CircuitBreaker {
         haveSendReqWhenHalfOpen.set(0);
         successfulReqWhenHalfOpen.set(0);
         failedReqWhenHalfOpen.set(0);
+        completedReqWhenHalfOpen.set(0);
     }
 
 
@@ -148,8 +149,8 @@ public class CircuitBreaker {
 
     // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordSuccess(InvokeInfo invokeInfo){
-        completedReqWhenHalfOpen.incrementAndGet();
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
+            completedReqWhenHalfOpen.incrementAndGet();
             successfulReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
             bucketManager.recordSingle(invokeInfo.getStartTime(), true);
@@ -160,8 +161,8 @@ public class CircuitBreaker {
 
     // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordFailed(InvokeInfo invokeInfo){
-        completedReqWhenHalfOpen.incrementAndGet();
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
+            completedReqWhenHalfOpen.incrementAndGet();
             failedReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
             bucketManager.recordSingle(invokeInfo.getStartTime(), false);
