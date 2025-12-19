@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 负责
+ * （1）如果当前状态是半开，只有所有探测请求全部探测成功才修改状态为关闭，否则直接将断路器状态改为打开
  */
 @Slf4j
 public class CircuitBreaker {
@@ -27,6 +27,7 @@ public class CircuitBreaker {
     private AtomicInteger haveSendReqWhenHalfOpen = new AtomicInteger(0);
     private AtomicInteger successfulReqWhenHalfOpen = new AtomicInteger(0);
     private AtomicInteger failedReqWhenHalfOpen = new AtomicInteger(0);
+    private AtomicInteger completedReqWhenHalfOpen = new AtomicInteger(0);
 
     /**
      * 以下情况需要记录：
@@ -86,8 +87,9 @@ public class CircuitBreaker {
      */
 
     public void changeStatusWhenSuccess(long startTime) {
-        // 半开 -> 关闭
-        if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN && haveSendReqWhenHalfOpen.get() > 0) {
+        // 半开 -> 关闭(当前只有所有探测请求全部返回后才修改状态)
+        if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN && haveSendReqWhenHalfOpen.get() > 0
+                && completedReqWhenHalfOpen.get() >= haveSendReqWhenHalfOpen.get()) {
 
             float successRatio = successfulReqWhenHalfOpen.get() / (float) haveSendReqWhenHalfOpen.get();
             if (successRatio >= properties.getHalfOpenToOpenMinSuccessRatio()
@@ -101,7 +103,7 @@ public class CircuitBreaker {
     public void changeStatusWhenFailed(long startTime) {
         // 2. 关闭 -> 开
         if (currentStatus.get() == CircuitBreakerStatus.CLOSED){
-            float successRate = bucketManager.computeAndGetSuccessRate();
+            float successRate = bucketManager.computeAndGetSuccessRate(startTime);
 
             boolean shouldOpen = 1 - successRate >= properties.getClosedToOpenFailedRatio();
             if (shouldOpen && currentStatus.compareAndSet(CircuitBreakerStatus.CLOSED, CircuitBreakerStatus.OPEN)){
@@ -146,6 +148,7 @@ public class CircuitBreaker {
 
     // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordSuccess(InvokeInfo invokeInfo){
+        completedReqWhenHalfOpen.incrementAndGet();
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
             successfulReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
@@ -157,6 +160,7 @@ public class CircuitBreaker {
 
     // （1）修改半开状态数据（2）修改统计数据（3）是否重置冷却期 （4）状态转换
     public void recordFailed(InvokeInfo invokeInfo){
+        completedReqWhenHalfOpen.incrementAndGet();
         if (currentStatus.get() == CircuitBreakerStatus.HALF_OPEN){
             failedReqWhenHalfOpen.incrementAndGet();
         } else if (currentStatus.get() == CircuitBreakerStatus.CLOSED) {
