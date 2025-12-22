@@ -71,23 +71,23 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
 
     private Object invokeTargetMethodByThreadPool(String methodKey, Object o, MethodProxy methodProxy, Object[] args) throws Throwable {
         ExecutorService executor = circuitBreakerManager.getExecutor(methodKey);
-        Future<Object> invokeFuture = executor.submit(() -> {
-            try {
-                return methodProxy.invoke(o, args);
-            } catch (Throwable e) {
-                throw new ExecuteTaskException(e);
-            }
-        });
-
+        Future<Object> invokeFuture = null;
         try {
+            invokeFuture = executor.submit(() -> {
+                try {
+                    return methodProxy.invoke(o, args);
+                } catch (Throwable e) {
+                    throw new ExecuteTaskException(e);
+                }
+            });
             return invokeFuture.get(1, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             invokeFuture.cancel(true);
             log.error("hystrix proxy invokeTargetMethodByThreadPool error", e);
             throw e;
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             invokeFuture.cancel(true);
+            Thread.currentThread().interrupt();
             throw e;
         } catch (ExecuteTaskException e) {
             throw e.getCause();

@@ -4,6 +4,7 @@ import com.wheel.cloud.hystrix.spring.HystrixProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -36,5 +37,22 @@ public class CircuitBreakerManager {
     public ExecutorService getExecutor(String methodKey) {
         return executorMap.computeIfAbsent(methodKey,
                 k -> new ThreadPoolExecutor(DEFAULT_CORE_SIZE, DEFAULT_MAX_SIZE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new ArrayBlockingQueue<>(DEFAULT_QUEUE_SIZE)));
+    }
+
+    @PreDestroy
+    public void destroy() {
+        executorMap.values().forEach(executorService -> {
+            executorService.shutdown();
+            try {
+                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executorService.shutdownNow();
+                    executorService.awaitTermination(5, TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException e) {
+                executorService.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+
+        });
     }
 }
