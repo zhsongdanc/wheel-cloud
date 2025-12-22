@@ -1,6 +1,7 @@
 package com.wheel.cloud.hystrix.anno;
 
 import com.wheel.cloud.hystrix.property.ThreadPoolProperty;
+import org.apache.commons.lang3.math.NumberUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,10 +14,14 @@ public class CommandParser {
     private static final String KEEP_ALIVE_TIME_KEY = "keepAliveTimeSeconds";
     private static final String QUEUE_SIZE_KEY = "queueSize";
 
+    private static final String MAX_SEMAPHORE_KEY = "maxSemaphore";
+
     private static final int DEFAULT_CORE_SIZE = 10;
     private static final int DEFAULT_MAX_SIZE = 20;
     private static final int DEFAULT_KEEP_ALIVE_SECONDS = 100;
     private static final int DEFAULT_QUEUE_SIZE = 100;
+
+    private static final int DEFAULT_MAX_SEMAPHORE = 20;
 
 
     // 未使用，暂不实现
@@ -47,6 +52,15 @@ public class CommandParser {
         threadPoolProperty.setKeepAliveTimeSeconds((int)properties.getOrDefault(KEEP_ALIVE_TIME_KEY, DEFAULT_KEEP_ALIVE_SECONDS));
         threadPoolProperty.setQueueSize((int)properties.getOrDefault(QUEUE_SIZE_KEY, DEFAULT_QUEUE_SIZE));
         return threadPoolProperty;
+    }
+
+    public static int parseMaxSemaphore(HystrixProperty[] hystrixProperties) {
+        for (HystrixProperty hystrixProperty : hystrixProperties) {
+            if (hystrixProperty.name().equals(MAX_SEMAPHORE_KEY)) {
+                return NumberUtils.toInt(hystrixProperty.value(), DEFAULT_MAX_SEMAPHORE);
+            }
+        }
+        return DEFAULT_MAX_SEMAPHORE;
     }
 
 }

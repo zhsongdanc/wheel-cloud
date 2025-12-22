@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -23,18 +24,24 @@ public class CircuitBreakerManager {
 
     private Map<String /*methodKey*/, CircuitBreaker> circuitBreakerMap = new ConcurrentHashMap<>();
 
-    private Map<String /*methodKey*/, ExecutorService> executorMap = new ConcurrentHashMap<>();
+    private Map<String /*groupKey*/, ExecutorService> executorMap = new ConcurrentHashMap<>();
+
+    private Map<String /*groupKey*/, Semaphore> semaphoreMap = new ConcurrentHashMap<>();
 
     public CircuitBreaker getCircuitBreaker(String methodKey) {
         return circuitBreakerMap.computeIfAbsent(methodKey, k -> new CircuitBreaker(methodKey, commandProperty));
     }
 
-    public ExecutorService getExecutor(String methodKey, ThreadPoolProperty threadPoolProperty) {
+    public ExecutorService getExecutor(String groupKey, ThreadPoolProperty threadPoolProperty) {
 
-        return executorMap.computeIfAbsent(methodKey,
+        return executorMap.computeIfAbsent(groupKey,
                 k -> new ThreadPoolExecutor(threadPoolProperty.getCoreSize(), threadPoolProperty.getMaxSize(),
                         threadPoolProperty.getKeepAliveTimeSeconds(), TimeUnit.SECONDS,
                         new ArrayBlockingQueue<>(threadPoolProperty.getQueueSize())));
+    }
+
+    public Semaphore getSemaphore(String groupKey, int maxConcurrentRequests) {
+        return semaphoreMap.computeIfAbsent(groupKey, k -> new Semaphore(maxConcurrentRequests));
     }
 
     @PreDestroy

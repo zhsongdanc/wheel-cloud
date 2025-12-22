@@ -1,5 +1,7 @@
 package com.wheel.cloud.hystrix.anno;
 
+import com.wheel.cloud.hystrix.enums.IsolationTypeEnum;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
@@ -13,6 +15,8 @@ public @interface HystrixCommand {
     String methodKey() default "";
 
     String threadPoolKey() default "";
+
+    IsolationTypeEnum isolation() default IsolationTypeEnum.THREAD;
 
     HystrixProperty[] commandProperties() default {};
 
