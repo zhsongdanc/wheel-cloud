@@ -1,20 +1,19 @@
 package com.wheel.cloud.hystrix.config;
 
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
+import com.wheel.cloud.hystrix.anno.CommandParser;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
 import com.wheel.cloud.hystrix.exception.ExecuteTaskException;
 import com.wheel.cloud.hystrix.exception.ForbiddenRequestException;
-import com.wheel.cloud.hystrix.spring.HystrixProperties;
+import com.wheel.cloud.hystrix.property.ThreadPoolProperty;
 import com.wheel.cloud.hystrix.util.ClassUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
 import java.lang.reflect.Method;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -33,8 +32,16 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
             log.info("hystrix proxy intercept,className:{},methodName:{}", o.getClass().getName(), method.getName());
             HystrixCommand annotation = method.getAnnotation(HystrixCommand.class);
             String fallbackMethodName = annotation.fallbackMethod();
+            String methodKey = annotation.methodKey();
+            String groupKey = annotation.groupKey();
+            ThreadPoolProperty threadPoolProperty = CommandParser.parseHystrixProperties(annotation.threadPoolProperties());
 
-            String methodKey = ClassUtil.generateMethodKey(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes());
+            if (StringUtils.isBlank(methodKey)) {
+                methodKey = ClassUtil.generateMethodKey(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes());
+            }
+            if (StringUtils.isBlank(groupKey)) {
+                groupKey = method.getDeclaringClass().getName();
+            }
 
             Object res = null;
             long startInvokeTime = System.currentTimeMillis();
@@ -42,10 +49,10 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                 if (!allowRequest(methodKey)) {
                     throw new ForbiddenRequestException("circuit breaker is open");
                 }
-                res = invokeTargetMethodByThreadPool(methodKey, o, methodProxy, args);
+                res = invokeTargetMethodByThreadPool(groupKey, o, methodProxy, args, threadPoolProperty);
                 recordSuccess(methodKey, startInvokeTime, System.currentTimeMillis());
             } catch (Throwable throwable) {
-                log.error("hystrix proxy fallbackMethod invoke error, but use defalut method");
+                log.error("hystrix proxy fallbackMethod invoke error, but use default method");
                 if (StringUtils.isNotBlank(fallbackMethodName)) {
                     Method fallbackMethod = findFallbackMethod(method.getDeclaringClass(), fallbackMethodName, method.getParameterTypes());
                     fallbackMethod.setAccessible(true);
@@ -69,8 +76,9 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
         return methodProxy.invokeSuper(o, args);
     }
 
-    private Object invokeTargetMethodByThreadPool(String methodKey, Object o, MethodProxy methodProxy, Object[] args) throws Throwable {
-        ExecutorService executor = circuitBreakerManager.getExecutor(methodKey);
+    private Object invokeTargetMethodByThreadPool(String groupKey, Object o, MethodProxy methodProxy, Object[] args,
+                                                  ThreadPoolProperty threadPoolProperty) throws Throwable {
+        ExecutorService executor = circuitBreakerManager.getExecutor(groupKey, threadPoolProperty);
         Future<Object> invokeFuture = null;
         try {
             invokeFuture = executor.submit(() -> {

@@ -7,4 +7,14 @@ import java.lang.annotation.RetentionPolicy;
 public @interface HystrixCommand {
 
     String fallbackMethod() default "";
+
+    String groupKey() default "";
+
+    String methodKey() default "";
+
+    String threadPoolKey() default "";
+
+    HystrixProperty[] commandProperties() default {};
+
+    HystrixProperty[] threadPoolProperties() default {};
 }

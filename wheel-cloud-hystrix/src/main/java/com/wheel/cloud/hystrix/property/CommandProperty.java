@@ -1,11 +1,12 @@
-package com.wheel.cloud.hystrix.spring;
+package com.wheel.cloud.hystrix.property;
 
+import com.wheel.cloud.hystrix.spring.HalfOpenToOpenStrategy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConfigurationProperties(prefix = "wheel.cloud.hystrix")
-public class HystrixProperties {
+public class CommandProperty {
 
     private HalfOpenToOpenStrategy halfOpenToOpenStrategy;
 

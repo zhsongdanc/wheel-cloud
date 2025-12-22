@@ -3,7 +3,7 @@ package com.wheel.cloud.hystrix.config;
 import com.wheel.cloud.hystrix.analytics.BucketManager;
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.enums.CircuitBreakerStatus;
-import com.wheel.cloud.hystrix.spring.HystrixProperties;
+import com.wheel.cloud.hystrix.property.CommandProperty;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,7 +19,7 @@ public class CircuitBreaker {
 
     private BucketManager bucketManager = new BucketManager();
 
-    private HystrixProperties properties;
+    private CommandProperty properties;
 
     private AtomicReference<CircuitBreakerStatus> currentStatus = new AtomicReference<>(CircuitBreakerStatus.CLOSED);
 
@@ -38,9 +38,9 @@ public class CircuitBreaker {
     private long coolDownTimestamp = 0;
 
 
-    public CircuitBreaker(String methodKey, HystrixProperties hystrixProperties) {
+    public CircuitBreaker(String methodKey, CommandProperty commandProperty) {
         this.methodKey = methodKey;
-        this.properties = hystrixProperties;
+        this.properties = commandProperty;
     }
 
 

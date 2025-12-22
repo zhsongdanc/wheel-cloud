@@ -3,6 +3,7 @@ package com.wheel.cloud.hystrix.spring;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
 import com.wheel.cloud.hystrix.config.CircuitBreakerManager;
 import com.wheel.cloud.hystrix.config.HystrixMethodInterceptor;
+import com.wheel.cloud.hystrix.property.CommandProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeansException;
@@ -21,7 +22,7 @@ public class HystrixPostProcessor implements BeanPostProcessor {
     private CircuitBreakerManager circuitBreakerManager;
 
     @Resource
-    private HystrixProperties hystrixProperties;
+    private CommandProperty commandProperty;
 
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
