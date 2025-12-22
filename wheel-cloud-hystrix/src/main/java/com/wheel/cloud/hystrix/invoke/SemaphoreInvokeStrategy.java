@@ -25,7 +25,7 @@ public class SemaphoreInvokeStrategy implements InvokeStrategy{
     public Object invoke(String groupKey, Object o, MethodProxy methodProxy, Object[] args, HystrixCommand annotation) throws Throwable {
         HystrixProperty[] hystrixProperties = annotation.commandProperties();
         int maxSemaphore = CommandParser.parseMaxSemaphore(hystrixProperties);
-        Semaphore semaphore = new Semaphore(maxSemaphore);
+        Semaphore semaphore = circuitBreakerManager.getSemaphore(groupKey, maxSemaphore);
         boolean acquired = semaphore.tryAcquire();
         if (acquired) {
             try {

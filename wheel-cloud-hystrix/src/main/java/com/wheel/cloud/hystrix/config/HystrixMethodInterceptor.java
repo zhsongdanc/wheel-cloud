@@ -4,6 +4,7 @@ import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
 import com.wheel.cloud.hystrix.enums.IsolationTypeEnum;
 import com.wheel.cloud.hystrix.exception.ForbiddenRequestException;
+import com.wheel.cloud.hystrix.exception.SemaphoreExceedLimitException;
 import com.wheel.cloud.hystrix.invoke.InvokeStrategy;
 import com.wheel.cloud.hystrix.invoke.InvokeStrategyFactory;
 import com.wheel.cloud.hystrix.util.ClassUtil;
@@ -60,7 +61,7 @@ public class HystrixMethodInterceptor implements MethodInterceptor {
                         throw new ForbiddenRequestException("fallback method invoke error", fallbackException);
                     }
                 }
-                if (throwable instanceof ForbiddenRequestException) {
+                if (throwable instanceof ForbiddenRequestException || throwable instanceof SemaphoreExceedLimitException) {
                     // nothing to do
                 } else {
                     recordFailed(methodKey, startInvokeTime, throwable.getClass().getName(), throwable.getMessage());
