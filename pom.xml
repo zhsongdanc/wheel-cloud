@@ -18,6 +18,7 @@
     <modules>
         <module>wheel-cloud-hystrix</module>
         <module>real-cloud-eureka</module>
+        <module>rpc-demo</module>
     </modules>
 
     <properties>

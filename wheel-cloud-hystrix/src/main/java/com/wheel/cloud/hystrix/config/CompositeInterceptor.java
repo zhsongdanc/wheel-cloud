@@ -2,11 +2,14 @@ package com.wheel.cloud.hystrix.config;
 
 import com.wheel.cloud.hystrix.analytics.InvokeInfo;
 import com.wheel.cloud.hystrix.anno.HystrixCommand;
+import com.wheel.cloud.hystrix.anno.RateLimit;
 import com.wheel.cloud.hystrix.enums.IsolationTypeEnum;
 import com.wheel.cloud.hystrix.exception.ForbiddenRequestException;
+import com.wheel.cloud.hystrix.exception.RejectExecuteException;
 import com.wheel.cloud.hystrix.exception.SemaphoreExceedLimitException;
 import com.wheel.cloud.hystrix.invoke.InvokeStrategy;
 import com.wheel.cloud.hystrix.invoke.InvokeStrategyFactory;
+import com.wheel.cloud.hystrix.limit.RateLimiter;
 import com.wheel.cloud.hystrix.util.ClassUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -16,16 +19,31 @@ import org.springframework.cglib.proxy.MethodProxy;
 import java.lang.reflect.Method;
 
 @Slf4j
-public class HystrixMethodInterceptor implements MethodInterceptor {
+public class CompositeInterceptor implements MethodInterceptor {
 
     private CircuitBreakerManager circuitBreakerManager;
 
-    public HystrixMethodInterceptor(CircuitBreakerManager circuitBreakerManager) {
+    private RateLimiterManager rateLimiterManager;
+
+    public CompositeInterceptor(CircuitBreakerManager circuitBreakerManager, RateLimiterManager rateLimiterManager) {
         this.circuitBreakerManager = circuitBreakerManager;
+        this.rateLimiterManager = rateLimiterManager;
     }
 
     @Override
     public Object intercept(Object o, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+        if (method.isAnnotationPresent(RateLimit.class)) {
+            RateLimit rateLimit = method.getAnnotation(RateLimit.class);
+            int algorithm = rateLimit.algorithm();
+            int permits = rateLimit.permitsPerSecond();
+            String methodKey = ClassUtil.generateMethodKey(method.getDeclaringClass().getName(), method.getName(), method.getParameterTypes());
+
+            RateLimiter rateLimiter = rateLimiterManager.getRateLimiter(methodKey, algorithm, permits);
+            if (!rateLimiter.allowRequest()) {
+                throw new RejectExecuteException("Rate limit exceeded");
+            }
+        }
+
         if (method.isAnnotationPresent(HystrixCommand.class)) {
             log.info("hystrix proxy intercept,className:{},methodName:{}", o.getClass().getName(), method.getName());
             HystrixCommand annotation = method.getAnnotation(HystrixCommand.class);
