@@ -54,8 +54,8 @@ public class SlidingWindowLimiter implements RateLimiter {
     private BucketCounter getBucketCounter(long timestamp) {
         int currentWindowIndex = computeWindowIndex(timestamp);
         long currentStartTimestamp = timestamp - timestamp % singleWindowWidth;
-        BucketCounter bucketCounter = bucketCounters.get(currentWindowIndex);
         while (true) {
+            BucketCounter bucketCounter = bucketCounters.get(currentWindowIndex);
             if (bucketCounter == null) {
                 bucketCounter = new BucketCounter(currentStartTimestamp, new LongAdder());
                 if (bucketCounters.compareAndSet(currentWindowIndex, null, bucketCounter)) {
