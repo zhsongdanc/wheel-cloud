@@ -19,6 +19,7 @@
         <module>wheel-cloud-hystrix</module>
         <module>real-cloud-eureka</module>
         <module>rpc-demo</module>
+        <module>db-export-oss</module>
     </modules>
 
     <properties>
