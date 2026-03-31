@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -90,8 +91,8 @@ public class EurekaLikeClient {
     }
 
     public ClientRegistryInstanceView chooseFirstInstance(String serviceName) {
-        ClientRegistryInstanceView chosen = getInstances(serviceName).stream()
-                .filter(instance -> instance.getLease() == null || !instance.getLease().isExpired())
+        List<ClientRegistryInstanceView> candidates = getAvailableInstances(serviceName);
+        ClientRegistryInstanceView chosen = candidates.stream()
                 .min(Comparator.comparing(instance -> instance.getInstanceInfo().getInstanceId()))
                 .orElse(null);
         if (chosen != null) {
@@ -102,6 +103,16 @@ public class EurekaLikeClient {
             log.warn("consumer found no available instance in local cache: serviceName={}", serviceName);
         }
         return chosen;
+    }
+
+    public List<ClientRegistryInstanceView> getAvailableInstances(String serviceName) {
+        List<ClientRegistryInstanceView> candidates = getInstances(serviceName).stream()
+                .filter(instance -> instance.getLease() == null || !instance.getLease().isExpired())
+                .sorted(Comparator.comparing(instance -> instance.getInstanceInfo().getInstanceId()))
+                .collect(Collectors.toList());
+        log.info("consumer loaded available instances from local cache: serviceName={}, candidateCount={}",
+                serviceName, candidates.size());
+        return candidates;
     }
 
     public ClientCacheView getCacheView() {

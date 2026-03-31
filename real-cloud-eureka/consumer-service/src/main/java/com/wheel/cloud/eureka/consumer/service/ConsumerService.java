@@ -6,9 +6,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -25,26 +28,43 @@ public class ConsumerService {
     }
 
     public Map<String, Object> callProvider(String serviceName, String name) {
-        ClientRegistryInstanceView target = eurekaLikeClient.chooseFirstInstance(serviceName);
-        if (target == null) {
+        List<ClientRegistryInstanceView> candidates = eurekaLikeClient.getAvailableInstances(serviceName);
+        if (candidates.isEmpty()) {
             throw new IllegalStateException("no available instance found in local cache for serviceName=" + serviceName);
         }
 
-        // 先查本地缓存，再根据缓存地址发起调用，这才是 Eureka 最关键的消费侧行为。
-        String url = "http://" + target.getInstanceInfo().getHost() + ":" + target.getInstanceInfo().getPort()
-                + "/provider/hello?name=" + name;
-        log.info("consumer calling provider: serviceName={}, targetInstanceId={}, url={}",
-                serviceName, target.getInstanceInfo().getInstanceId(), url);
-        Map<?, ?> providerResponse = restTemplate.getForObject(url, Map.class);
-        log.info("consumer received provider response: serviceName={}, targetInstanceId={}",
-                serviceName, target.getInstanceInfo().getInstanceId());
+        List<String> attemptedInstanceIds = new ArrayList<>();
+        RestClientException lastException = null;
+        for (ClientRegistryInstanceView target : candidates) {
+            String url = "http://" + target.getInstanceInfo().getHost() + ":" + target.getInstanceInfo().getPort()
+                    + "/provider/hello?name=" + name;
+            attemptedInstanceIds.add(target.getInstanceInfo().getInstanceId());
+            try {
+                // 先查本地缓存，再根据缓存地址发起调用；失败时切换到缓存里的下一个实例继续尝试。
+                log.info("consumer calling provider: serviceName={}, targetInstanceId={}, url={}",
+                        serviceName, target.getInstanceInfo().getInstanceId(), url);
+                Map<?, ?> providerResponse = restTemplate.getForObject(url, Map.class);
+                log.info("consumer received provider response: serviceName={}, targetInstanceId={}",
+                        serviceName, target.getInstanceInfo().getInstanceId());
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("serviceName", serviceName);
-        response.put("targetInstanceId", target.getInstanceInfo().getInstanceId());
-        response.put("targetHost", target.getInstanceInfo().getHost());
-        response.put("targetPort", target.getInstanceInfo().getPort());
-        response.put("providerResponse", providerResponse);
-        return response;
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("serviceName", serviceName);
+                response.put("targetInstanceId", target.getInstanceInfo().getInstanceId());
+                response.put("targetHost", target.getInstanceInfo().getHost());
+                response.put("targetPort", target.getInstanceInfo().getPort());
+                response.put("attemptedInstanceIds", attemptedInstanceIds);
+                response.put("providerResponse", providerResponse);
+                return response;
+            } catch (RestClientException exception) {
+                lastException = exception;
+                log.warn("consumer call failed, trying next cached instance if available: serviceName={}, targetInstanceId={}",
+                        serviceName, target.getInstanceInfo().getInstanceId(), exception);
+            }
+        }
+
+        throw new IllegalStateException(
+                "all cached provider instances failed for serviceName=" + serviceName + ", attemptedInstanceIds=" + attemptedInstanceIds,
+                lastException
+        );
     }
 }
