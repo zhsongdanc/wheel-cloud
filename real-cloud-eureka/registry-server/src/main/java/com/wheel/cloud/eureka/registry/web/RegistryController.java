@@ -4,8 +4,10 @@ import com.wheel.cloud.eureka.registry.model.InstanceInfo;
 import com.wheel.cloud.eureka.registry.model.Lease;
 import com.wheel.cloud.eureka.registry.model.RegisterInstanceRequest;
 import com.wheel.cloud.eureka.registry.model.RegisterResponse;
+import com.wheel.cloud.eureka.registry.model.DeltaSyncResponse;
 import com.wheel.cloud.eureka.registry.model.RegistryInstanceView;
 import com.wheel.cloud.eureka.registry.model.RegistrySnapshot;
+import com.wheel.cloud.eureka.registry.store.RegistryDeltaLog;
 import com.wheel.cloud.eureka.registry.store.InMemoryRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,9 +30,11 @@ import java.util.Map;
 public class RegistryController {
 
     private final InMemoryRegistry registry;
+    private final RegistryDeltaLog registryDeltaLog;
 
-    public RegistryController(InMemoryRegistry registry) {
+    public RegistryController(InMemoryRegistry registry, RegistryDeltaLog registryDeltaLog) {
         this.registry = registry;
+        this.registryDeltaLog = registryDeltaLog;
     }
 
     @PostMapping("/apps")
@@ -80,5 +85,10 @@ public class RegistryController {
     @GetMapping("/apps")
     public RegistrySnapshot snapshot() {
         return registry.snapshot();
+    }
+
+    @GetMapping("/delta")
+    public DeltaSyncResponse delta(@RequestParam(defaultValue = "0") long lastSeenVersion) {
+        return registryDeltaLog.syncFrom(lastSeenVersion);
     }
 }

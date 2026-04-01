@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,5 +40,15 @@ public class ConsumerController {
     public Map<String, Object> call(@PathVariable String serviceName,
                                     @RequestParam(defaultValue = "world") String name) {
         return consumerService.callProvider(serviceName, name);
+    }
+
+    @GetMapping("/debug/force-last-seen-version")
+    public Map<String, Object> forceLastSeenVersion(@RequestParam long version) {
+        long previousVersion = eurekaLikeClient.forceLastSeenVersion(version);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("previousVersion", previousVersion);
+        response.put("currentVersion", version);
+        response.put("message", "lastSeenVersion updated for debugging");
+        return response;
     }
 }

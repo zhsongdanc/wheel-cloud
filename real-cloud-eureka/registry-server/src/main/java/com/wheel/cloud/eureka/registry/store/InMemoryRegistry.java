@@ -1,6 +1,7 @@
 package com.wheel.cloud.eureka.registry.store;
 
 import com.wheel.cloud.eureka.registry.config.RegistryProperties;
+import com.wheel.cloud.eureka.registry.model.DeltaEventType;
 import com.wheel.cloud.eureka.registry.model.InstanceInfo;
 import com.wheel.cloud.eureka.registry.model.Lease;
 import com.wheel.cloud.eureka.registry.model.LeaseView;
@@ -27,12 +28,14 @@ public class InMemoryRegistry {
     private static final Logger log = LoggerFactory.getLogger(InMemoryRegistry.class);
 
     private final RegistryProperties registryProperties;
+    private final RegistryDeltaLog registryDeltaLog;
 
     // 注册中心维护的是 service -> instance -> lease，而不是平铺实例表。
     private final ConcurrentMap<String, ConcurrentMap<String, Lease<InstanceInfo>>> registry = new ConcurrentHashMap<>();
 
-    public InMemoryRegistry(RegistryProperties registryProperties) {
+    public InMemoryRegistry(RegistryProperties registryProperties, RegistryDeltaLog registryDeltaLog) {
         this.registryProperties = registryProperties;
+        this.registryDeltaLog = registryDeltaLog;
     }
 
     public Lease<InstanceInfo> register(RegisterInstanceRequest request) {
@@ -50,6 +53,7 @@ public class InMemoryRegistry {
         Lease<InstanceInfo> lease = new Lease<>(instanceInfo, registryProperties.getLeaseDurationMs(), now);
         registry.computeIfAbsent(instanceInfo.getServiceName(), key -> new ConcurrentHashMap<>())
                 .put(instanceInfo.getInstanceId(), lease);
+        registryDeltaLog.append(DeltaEventType.REGISTER, instanceInfo);
         log.info("registered instance: serviceName={}, instanceId={}, host={}, port={}",
                 instanceInfo.getServiceName(), instanceInfo.getInstanceId(), instanceInfo.getHost(), instanceInfo.getPort());
         return lease;
@@ -77,6 +81,7 @@ public class InMemoryRegistry {
             registry.remove(normalizedServiceName, instances);
         }
         if (removed != null) {
+            registryDeltaLog.append(DeltaEventType.UNREGISTER, removed.getHolder());
             log.info("unregistered instance: serviceName={}, instanceId={}", normalizedServiceName, instanceId);
         }
         return removed != null;
@@ -114,6 +119,7 @@ public class InMemoryRegistry {
             instances.forEach((instanceId, lease) -> {
                 if (lease.isExpired(now) && instances.remove(instanceId, lease)) {
                     evicted.add(toView(lease, now));
+                    registryDeltaLog.append(DeltaEventType.EXPIRE, lease.getHolder());
                     log.warn("evicted expired instance: serviceName={}, instanceId={}, lastRenewalTimestamp={}",
                             serviceName, instanceId, lease.getLastRenewalTimestamp());
                 }

@@ -16,7 +16,7 @@ class InMemoryRegistryTest {
     void shouldRegisterRenewAndEvictInstance() throws InterruptedException {
         RegistryProperties properties = new RegistryProperties();
         properties.setLeaseDurationMs(50L);
-        InMemoryRegistry registry = new InMemoryRegistry(properties);
+        InMemoryRegistry registry = new InMemoryRegistry(properties, new RegistryDeltaLog());
 
         RegisterInstanceRequest request = new RegisterInstanceRequest();
         request.setServiceName("order-service");
@@ -38,7 +38,7 @@ class InMemoryRegistryTest {
     @Test
     void shouldReturnFalseWhenRenewMissingInstance() {
         RegistryProperties properties = new RegistryProperties();
-        InMemoryRegistry registry = new InMemoryRegistry(properties);
+        InMemoryRegistry registry = new InMemoryRegistry(properties, new RegistryDeltaLog());
 
         assertFalse(registry.renew("payment-service", "payment-service-1"));
         assertFalse(registry.unregister("payment-service", "payment-service-1"));
