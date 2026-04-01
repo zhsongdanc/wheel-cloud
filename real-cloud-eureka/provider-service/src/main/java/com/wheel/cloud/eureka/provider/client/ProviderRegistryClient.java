@@ -21,6 +21,9 @@ public class ProviderRegistryClient {
     private final ProviderClientProperties properties;
     private final RestTemplate restTemplate;
     private final AtomicBoolean registered = new AtomicBoolean(false);
+    private final AtomicBoolean registrationDirty = new AtomicBoolean(true);
+    private final AtomicBoolean registrationInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean replicatorStarted = new AtomicBoolean(false);
 
     public ProviderRegistryClient(ProviderClientProperties properties, RestTemplateBuilder restTemplateBuilder) {
         this.properties = properties;
@@ -32,13 +35,13 @@ public class ProviderRegistryClient {
         log.info("provider startup: serviceName={}, instanceId={}, host={}, port={}, registryUrl={}",
                 properties.getServiceName(), properties.getInstanceId(), properties.getHost(),
                 properties.getPort(), properties.getRegistryUrl());
-        registerIfNecessary();
+        startReplicator();
     }
 
     @Scheduled(fixedDelayString = "${discovery.client.renewal-interval-ms:5000}")
     public void renewLease() {
         if (!registered.get()) {
-            registerIfNecessary();
+            requestRegistrationUpdate("lease-renew-found-unregistered");
             return;
         }
         try {
@@ -48,15 +51,35 @@ public class ProviderRegistryClient {
                     properties.getServiceName(), properties.getInstanceId());
         } catch (RestClientException exception) {
             registered.set(false);
+            registrationDirty.set(true);
             log.warn("failed to renew provider lease, will retry register", exception);
         }
     }
 
-    private void registerIfNecessary() {
-        if (registered.get()) {
+    private void startReplicator() {
+        if (!replicatorStarted.compareAndSet(false, true)) {
+            return;
+        }
+        requestRegistrationUpdate("startup");
+    }
+
+    private void requestRegistrationUpdate(String reason) {
+        registrationDirty.set(true);
+        replicateIfNecessary(reason);
+    }
+
+    private void replicateIfNecessary(String reason) {
+        if (!registrationDirty.get()) {
+            return;
+        }
+        if (!registrationInProgress.compareAndSet(false, true)) {
+            log.debug("provider registration update skipped because another replication is in progress: reason={}", reason);
             return;
         }
         try {
+            if (!registrationDirty.get()) {
+                return;
+            }
             RegisterInstanceRequest request = new RegisterInstanceRequest();
             request.setServiceName(properties.getServiceName());
             request.setInstanceId(properties.getInstanceId());
@@ -64,10 +87,14 @@ public class ProviderRegistryClient {
             request.setPort(properties.getPort());
             restTemplate.postForObject(buildAppsPath(), request, Object.class);
             registered.set(true);
+            registrationDirty.set(false);
             log.info("provider registered to registry: serviceName={}, instanceId={}, host={}, port={}",
                     properties.getServiceName(), properties.getInstanceId(), properties.getHost(), properties.getPort());
         } catch (RestClientException exception) {
+            registered.set(false);
             log.warn("failed to register provider to registry", exception);
+        } finally {
+            registrationInProgress.set(false);
         }
     }
 

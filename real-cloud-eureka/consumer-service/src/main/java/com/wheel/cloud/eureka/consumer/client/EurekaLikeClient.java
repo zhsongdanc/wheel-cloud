@@ -37,6 +37,10 @@ public class EurekaLikeClient {
     private final DiscoveryClientProperties properties;
     private final RestTemplate restTemplate;
     private final AtomicBoolean registered = new AtomicBoolean(false);
+    private final AtomicBoolean registrationDirty = new AtomicBoolean(true);
+    private final AtomicBoolean registrationInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean registrationReplicatorStarted = new AtomicBoolean(false);
+    private final AtomicBoolean fetchInProgress = new AtomicBoolean(false);
     private final AtomicLong lastFetchTimestamp = new AtomicLong(0L);
     private final AtomicLong lastSeenVersion = new AtomicLong(0L);
     private final AtomicReference<ClientRegistrySnapshot> localCache = new AtomicReference<>(emptySnapshot());
@@ -51,14 +55,14 @@ public class EurekaLikeClient {
         log.info("consumer startup: serviceName={}, instanceId={}, host={}, port={}, registryUrl={}",
                 properties.getServiceName(), properties.getInstanceId(), properties.getHost(),
                 properties.getPort(), properties.getRegistryUrl());
-        registerIfNecessary();
+        startRegistrationReplicator();
         fetchRegistry();
     }
 
     @Scheduled(fixedDelayString = "${discovery.client.renewal-interval-ms:5000}")
     public void renewLease() {
         if (!registered.get()) {
-            registerIfNecessary();
+            requestRegistrationUpdate("lease-renew-found-unregistered");
             return;
         }
         try {
@@ -67,12 +71,17 @@ public class EurekaLikeClient {
                     properties.getServiceName(), properties.getInstanceId());
         } catch (RestClientException exception) {
             registered.set(false);
+            registrationDirty.set(true);
             log.warn("failed to renew consumer lease, will retry register", exception);
         }
     }
 
     @Scheduled(fixedDelayString = "${discovery.client.fetch-registry-interval-ms:8000}")
     public void fetchRegistry() {
+        if (!fetchInProgress.compareAndSet(false, true)) {
+            log.debug("consumer skipped registry fetch because another fetch is in progress");
+            return;
+        }
         try {
             DeltaSyncResponse delta = restTemplate.getForObject(buildDeltaPath(), DeltaSyncResponse.class, lastSeenVersion.get());
             if (delta != null) {
@@ -86,6 +95,8 @@ public class EurekaLikeClient {
             }
         } catch (RestClientException exception) {
             log.warn("failed to fetch registry snapshot, will continue using local cache", exception);
+        } finally {
+            fetchInProgress.set(false);
         }
     }
 
@@ -134,11 +145,30 @@ public class EurekaLikeClient {
         return previousVersion;
     }
 
-    private void registerIfNecessary() {
-        if (registered.get()) {
+    private void startRegistrationReplicator() {
+        if (!registrationReplicatorStarted.compareAndSet(false, true)) {
+            return;
+        }
+        requestRegistrationUpdate("startup");
+    }
+
+    private void requestRegistrationUpdate(String reason) {
+        registrationDirty.set(true);
+        replicateRegistrationIfNecessary(reason);
+    }
+
+    private void replicateRegistrationIfNecessary(String reason) {
+        if (!registrationDirty.get()) {
+            return;
+        }
+        if (!registrationInProgress.compareAndSet(false, true)) {
+            log.debug("consumer registration update skipped because another replication is in progress: reason={}", reason);
             return;
         }
         try {
+            if (!registrationDirty.get()) {
+                return;
+            }
             RegisterInstanceRequest request = new RegisterInstanceRequest();
             request.setServiceName(properties.getServiceName());
             request.setInstanceId(properties.getInstanceId());
@@ -146,10 +176,14 @@ public class EurekaLikeClient {
             request.setPort(properties.getPort());
             restTemplate.postForObject(buildAppsPath(), request, Object.class);
             registered.set(true);
+            registrationDirty.set(false);
             log.info("consumer registered to registry: serviceName={}, instanceId={}, host={}, port={}",
                     properties.getServiceName(), properties.getInstanceId(), properties.getHost(), properties.getPort());
         } catch (RestClientException exception) {
+            registered.set(false);
             log.warn("failed to register consumer to registry", exception);
+        } finally {
+            registrationInProgress.set(false);
         }
     }
 
