@@ -20,6 +20,7 @@
         <module>real-cloud-eureka</module>
         <module>rpc-demo</module>
         <module>db-export-oss</module>
+        <module>filter-interceptor-demo</module>
     </modules>
 
     <properties>
