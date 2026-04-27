@@ -1,0 +1,12 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: mcp-client
+  main:
+    web-application-type: none  # 客户端不需要 web 服务器
+
+logging:
+  level:
+    com.wheel.cloud.mcp: DEBUG

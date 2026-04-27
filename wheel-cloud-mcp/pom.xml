@@ -4,27 +4,18 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- 不继承父 pom，独立使用 Spring Boot 2.7 -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>2.7.18</version>
-        <relativePath/> <!-- 优先从仓库拉取，不依赖本地 -->
+        <relativePath/>
     </parent>
 
     <groupId>com.wheel.cloud</groupId>
-    <artifactId>wheel-cloud</artifactId>
-    <packaging>pom</packaging>
+    <artifactId>wheel-cloud-mcp</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <modules>
-        <module>wheel-cloud-hystrix</module>
-        <module>real-cloud-eureka</module>
-        <module>rpc-demo</module>
-        <module>db-export-oss</module>
-        <module>filter-interceptor-demo</module>
-        <module>wheel-cloud-seata</module>
-        <module>wheel-cloud-mcp</module>
-        <module>wheel-cloud-apollo</module>
-    </modules>
+    <packaging>jar</packaging>
 
     <properties>
         <java.version>1.8</java.version>
@@ -35,11 +26,12 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- WebClient for SSE client -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -47,13 +39,22 @@
             <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.reactivex</groupId>
-            <artifactId>rxjava</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 服务端和客户端分别有各自的 main class，打包时指定其中一个 -->
+                    <mainClass>com.wheel.cloud.mcp.server.McpServerApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>
