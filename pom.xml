@@ -24,6 +24,7 @@
         <module>wheel-cloud-seata</module>
         <module>wheel-cloud-mcp</module>
         <module>wheel-cloud-apollo</module>
+        <module>wheel-cloud-loadbalancer</module>
     </modules>
 
     <properties>
