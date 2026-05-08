@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wheel.cloud.task.mapper.TaskMapper">
+
+    <resultMap id="TaskResultMap" type="com.wheel.cloud.task.entity.Task">
+        <id property="id" column="id"/>
+        <result property="taskBizId" column="task_biz_id"/>
+        <result property="taskName" column="task_name"/>
+        <result property="taskTypeCode" column="task_type_code"/>
+        <result property="executorType" column="executor_type"/>
+        <result property="waitStrategy" column="wait_strategy"
+                typeHandler="org.apache.ibatis.type.EnumTypeHandler"/>
+        <result property="creator" column="creator"/>
+        <result property="assignee" column="assignee"/>
+        <result property="priority" column="priority"/>
+        <result property="status" column="status"/>
+        <result property="subStatus" column="sub_status"/>
+        <result property="failureReason" column="failure_reason"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="version" column="version"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="parentExecutionRound" column="parent_execution_round"/>
+        <result property="rootId" column="root_id"/>
+        <result property="executionRound" column="execution_round"/>
+        <result property="inputData" column="input_data"/>
+        <result property="outputData" column="output_data"/>
+        <result property="wakeupContext" column="wakeup_context"/>
+        <result property="scheduledTime" column="scheduled_time"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="expireTime" column="expire_time"/>
+        <result property="retryCount" column="retry_count"/>
+        <result property="maxRetry" column="max_retry"/>
+        <result property="errorMsg" column="error_msg"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO t_task (
+            task_biz_id, task_name, task_type_code, executor_type, wait_strategy,
+            creator, assignee, priority, status, sub_status, failure_reason,
+            session_id, version, parent_id, parent_execution_round, root_id,
+            execution_round, input_data, output_data, wakeup_context,
+            scheduled_time, start_time, end_time, expire_time,
+            retry_count, max_retry, error_msg, create_time, update_time
+        ) VALUES (
+            #{taskBizId}, #{taskName}, #{taskTypeCode}, #{executorType},
+            #{waitStrategy, typeHandler=org.apache.ibatis.type.EnumTypeHandler},
+            #{creator}, #{assignee}, #{priority}, #{status}, #{subStatus}, #{failureReason},
+            #{sessionId}, #{version}, #{parentId}, #{parentExecutionRound}, #{rootId},
+            #{executionRound}, #{inputData}, #{outputData}, #{wakeupContext},
+            #{scheduledTime}, #{startTime}, #{endTime}, #{expireTime},
+            #{retryCount}, #{maxRetry}, #{errorMsg}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <!-- 更新非 null 字段 -->
+    <update id="update">
+        UPDATE t_task
+        <set>
+            <if test="taskBizId != null">task_biz_id = #{taskBizId},</if>
+            <if test="taskName != null">task_name = #{taskName},</if>
+            <if test="executorType != null">executor_type = #{executorType},</if>
+            <if test="waitStrategy != null">wait_strategy = #{waitStrategy, typeHandler=org.apache.ibatis.type.EnumTypeHandler},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="subStatus != null">sub_status = #{subStatus},</if>
+            <if test="failureReason != null">failure_reason = #{failureReason},</if>
+            <if test="sessionId != null">session_id = #{sessionId},</if>
+            <if test="inputData != null">input_data = #{inputData},</if>
+            <if test="outputData != null">output_data = #{outputData},</if>
+            <if test="wakeupContext != null">wakeup_context = #{wakeupContext},</if>
+            <if test="scheduledTime != null">scheduled_time = #{scheduledTime},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="expireTime != null">expire_time = #{expireTime},</if>
+            <if test="retryCount != null">retry_count = #{retryCount},</if>
+            <if test="errorMsg != null">error_msg = #{errorMsg},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 更新包含 null 字段（用于清空字段） -->
+    <update id="updateIncludeNull">
+        UPDATE t_task SET
+            task_biz_id = #{taskBizId},
+            status = #{status},
+            sub_status = #{subStatus},
+            failure_reason = #{failureReason},
+            session_id = #{sessionId},
+            input_data = #{inputData},
+            output_data = #{outputData},
+            wakeup_context = #{wakeupContext},
+            scheduled_time = #{scheduledTime},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            expire_time = #{expireTime},
+            retry_count = #{retryCount},
+            error_msg = #{errorMsg},
+            execution_round = #{executionRound},
+            parent_execution_round = #{parentExecutionRound},
+            update_time = #{updateTime}
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="TaskResultMap">
+        SELECT * FROM t_task WHERE id = #{id}
+    </select>
+
+    <select id="selectByBizIdOne" resultMap="TaskResultMap">
+        SELECT * FROM t_task WHERE task_biz_id = #{taskBizId} LIMIT 1
+    </select>
+
+    <select id="selectByParentId" resultMap="TaskResultMap">
+        SELECT * FROM t_task WHERE parent_id = #{parentId}
+    </select>
+
+    <select id="selectByBizIdAndTaskType" resultMap="TaskResultMap">
+        SELECT * FROM t_task
+        WHERE task_biz_id = #{taskBizId}
+        <if test="taskTypeCode != null">AND task_type_code = #{taskTypeCode}</if>
+    </select>
+
+    <!-- 补偿调度：PENDING 且 scheduled_time <= scheduledBefore -->
+    <select id="selectSchedulablePending" resultMap="TaskResultMap">
+        SELECT * FROM t_task
+        WHERE status = 'PENDING'
+          AND (
+                (scheduled_time IS NULL AND create_time &lt;= #{scheduledBefore})
+                OR scheduled_time &lt;= #{scheduledBefore}
+              )
+        ORDER BY priority DESC, create_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 待重试：RETRYING 且 scheduled_time <= NOW() -->
+    <select id="selectPendingRetry" resultMap="TaskResultMap">
+        SELECT * FROM t_task
+        WHERE status = 'RETRYING'
+          AND scheduled_time IS NOT NULL
+          AND scheduled_time &lt;= NOW()
+        ORDER BY priority DESC, scheduled_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 超时候选：RUNNING 且 start_time < threshold -->
+    <select id="selectAbnormalRunning" resultMap="TaskResultMap">
+        SELECT * FROM t_task
+        WHERE status = 'RUNNING'
+          AND start_time IS NOT NULL
+          AND start_time &lt; #{threshold}
+        ORDER BY start_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 按状态分页 -->
+    <select id="selectByStatus" resultMap="TaskResultMap">
+        SELECT * FROM t_task
+        WHERE status = #{status}
+        ORDER BY priority DESC, create_time ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+</mapper>

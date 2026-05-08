@@ -25,6 +25,7 @@
         <module>wheel-cloud-mcp</module>
         <module>wheel-cloud-apollo</module>
         <module>wheel-cloud-loadbalancer</module>
+        <module>wheel-cloud-task</module>
     </modules>
 
     <properties>

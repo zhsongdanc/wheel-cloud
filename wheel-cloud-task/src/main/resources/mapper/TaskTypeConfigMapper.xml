@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wheel.cloud.task.mapper.TaskTypeConfigMapper">
+
+    <resultMap id="ConfigResultMap" type="com.wheel.cloud.task.entity.TaskTypeConfig">
+        <id property="id" column="id"/>
+        <result property="taskTypeCode" column="task_type_code"/>
+        <result property="taskTypeName" column="task_type_name"/>
+        <result property="executorType" column="executor_type"/>
+        <result property="maxRetryCount" column="max_retry_count"/>
+        <result property="retryIntervalSeconds" column="retry_interval_seconds"/>
+        <result property="retryStrategy" column="retry_strategy"/>
+        <result property="timeoutSeconds" column="timeout_seconds"/>
+        <result property="enabled" column="enabled"/>
+        <result property="priority" column="priority"/>
+        <result property="defaultExpireSeconds" column="default_expire_seconds"/>
+        <result property="useSession" column="use_session"/>
+        <result property="description" column="description"/>
+        <result property="rateLimitKey" column="rate_limit_key"/>
+        <result property="rateLimitEvents" column="rate_limit_events"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="selectByTaskTypeCode" resultMap="ConfigResultMap">
+        SELECT * FROM t_task_type_config WHERE task_type_code = #{taskTypeCode} AND enabled = 1
+    </select>
+
+    <select id="selectByTaskTypeCodes" resultMap="ConfigResultMap">
+        SELECT * FROM t_task_type_config
+        WHERE task_type_code IN
+        <foreach collection="taskTypeCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        AND enabled = 1
+    </select>
+
+</mapper>

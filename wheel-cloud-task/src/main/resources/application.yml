@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    # 替换为实际 MySQL 连接信息
+    url: jdbc:mysql://localhost:3306/wheel_task?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: your_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
