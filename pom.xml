@@ -26,6 +26,7 @@
         <module>wheel-cloud-apollo</module>
         <module>wheel-cloud-loadbalancer</module>
         <module>wheel-cloud-task</module>
+        <module>wheel-cloud-seata-at</module>
     </modules>
 
     <properties>

@@ -1,0 +1,64 @@
+server:
+  # 应用端口 8092（Seata Server 默认占用 8091）
+  port: 8092
+
+spring:
+  application:
+    name: seata-at-demo
+
+  # 关闭 SpringBoot 自动配置单数据源（我们手动配置三个）
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure
+
+  datasource:
+    order:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    stock:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_stock?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    account:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_account?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+
+# -------------------------------------------------------
+# Seata 配置
+# -------------------------------------------------------
+seata:
+  enabled: true
+  application-id: seata-at-demo
+  tx-service-group: seata-at-demo-group
+
+  service:
+    vgroup-mapping:
+      # 事务组 -> 集群名（file 模式下 default 就是 grouplist 里的 key）
+      seata-at-demo-group: default
+    grouplist:
+      # Seata Server（TC）地址，默认端口 8091
+      default: 127.0.0.1:8091
+
+  # AT 模式
+  data-source-proxy-mode: AT
+
+  # 本地测试用 file 模式（不依赖注册中心）
+  registry:
+    type: file
+  config:
+    type: file
+
+# -------------------------------------------------------
+# MyBatis Plus（多数据源场景不走自动配置，但保留日志）
+# -------------------------------------------------------
+logging:
+  level:
+    io.seata: INFO
+    com.wheel.cloud.seata.at: DEBUG
+    com.baomidou.mybatisplus: DEBUG
