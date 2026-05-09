@@ -1,0 +1,47 @@
+server:
+  port: 8093
+
+spring:
+  application:
+    name: seata-tcc-demo
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure
+  datasource:
+    order:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    stock:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_stock?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    account:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_account?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+
+seata:
+  enabled: true
+  application-id: seata-tcc-demo
+  tx-service-group: seata-tcc-demo-group
+  service:
+    vgroup-mapping:
+      seata-tcc-demo-group: default
+    grouplist:
+      default: 127.0.0.1:8091
+  # TCC 模式不用 DataSourceProxy，数据源保持原生
+  data-source-proxy-mode: AT
+  registry:
+    type: file
+  config:
+    type: file
+
+logging:
+  level:
+    io.seata: INFO
+    com.wheel.cloud.seata.tcc: DEBUG

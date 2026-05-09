@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>wheel-cloud</artifactId>
+        <groupId>com.wheel.cloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>wheel-cloud-seata-all</artifactId>
+    <packaging>pom</packaging>
+
+    <!--
+        Seata 四种模式汇总模块
+          wheel-cloud-seata-at   → 8092  AT  模式（DataSourceProxy + undo_log，对业务透明）
+          wheel-cloud-seata-tcc  → 8093  TCC 模式（@LocalTCC + Try/Confirm/Cancel，手写补偿）
+          wheel-cloud-seata-xa   → 8094  XA  模式（DataSourceProxyXA，数据库原生两阶段，无 undo_log）
+          wheel-cloud-seata-saga → 8095  Saga模式（正向服务 + 补偿服务，最终一致，无全局锁）
+    -->
+    <modules>
+        <module>wheel-cloud-seata-at</module>
+        <module>wheel-cloud-seata-tcc</module>
+        <module>wheel-cloud-seata-xa</module>
+        <module>wheel-cloud-seata-saga</module>
+    </modules>
+
+    <properties>
+        <seata.version>1.7.0</seata.version>
+        <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
+        <mysql.version>8.0.33</mysql.version>
+        <druid.version>1.2.18</druid.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.seata</groupId>
+                <artifactId>seata-spring-boot-starter</artifactId>
+                <version>${seata.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>mysql</groupId>
+                <artifactId>mysql-connector-java</artifactId>
+                <version>${mysql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>druid-spring-boot-starter</artifactId>
+                <version>${druid.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

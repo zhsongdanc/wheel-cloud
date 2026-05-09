@@ -1,0 +1,47 @@
+server:
+  port: 8094
+
+spring:
+  application:
+    name: seata-xa-demo
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure
+  datasource:
+    order:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    stock:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_stock?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+    account:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/seata_account?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      username: root
+      password:
+
+seata:
+  enabled: true
+  application-id: seata-xa-demo
+  tx-service-group: seata-xa-demo-group
+  service:
+    vgroup-mapping:
+      seata-xa-demo-group: default
+    grouplist:
+      default: 127.0.0.1:8091
+  # XA 模式：数据源代理改为 XA
+  data-source-proxy-mode: XA
+  registry:
+    type: file
+  config:
+    type: file
+
+logging:
+  level:
+    io.seata: INFO
+    com.wheel.cloud.seata.xa: DEBUG
